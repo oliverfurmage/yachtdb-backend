@@ -202,5 +202,4 @@ resources:
         Name: ${self:service}-UserPoolClientId-${self:provider.stage}
 
 plugins:
-  - serverless-plugin-typescript
   - serverless-offline
