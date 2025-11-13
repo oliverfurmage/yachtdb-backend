@@ -1,0 +1,205 @@
+service: yachtdb-backend
+
+frameworkVersion: '4'
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  profile: ${env:awsProfile, 'default'}
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  memorySize: 256
+  timeout: 30
+  
+  environment:
+    YACHTS_TABLE: ${self:service}-yachts-${self:provider.stage}
+    FIELD_CONFIG_TABLE: ${self:service}-field-config-${self:provider.stage}
+    USER_POOL_ID: !Ref UserPool
+  
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.YACHTS_TABLE}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.FIELD_CONFIG_TABLE}
+            - arn:aws:dynamodb:${self:provider.region}:*:table/${self:provider.environment.YACHTS_TABLE}/index/*
+
+functions:
+  # Field Configuration
+  getFieldConfig:
+    handler: src/handlers/fieldConfig.get
+    events:
+      - httpApi:
+          path: /field-config
+          method: get
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+  updateFieldConfig:
+    handler: src/handlers/fieldConfig.update
+    events:
+      - httpApi:
+          path: /field-config
+          method: put
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+  # Yachts
+  listYachts:
+    handler: src/handlers/yachts.list
+    events:
+      - httpApi:
+          path: /yachts
+          method: get
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+  getYacht:
+    handler: src/handlers/yachts.get
+    events:
+      - httpApi:
+          path: /yachts/{id}
+          method: get
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+  createYacht:
+    handler: src/handlers/yachts.create
+    events:
+      - httpApi:
+          path: /yachts
+          method: post
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+  updateYacht:
+    handler: src/handlers/yachts.update
+    events:
+      - httpApi:
+          path: /yachts/{id}
+          method: put
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+  deleteYacht:
+    handler: src/handlers/yachts.delete
+    events:
+      - httpApi:
+          path: /yachts/{id}
+          method: delete
+          authorizer:
+            type: jwt
+            id: !Ref HttpApiAuthorizer
+
+resources:
+  Resources:
+    # HTTP API Authorizer
+    HttpApiAuthorizer:
+      Type: AWS::ApiGatewayV2::Authorizer
+      Properties:
+        ApiId: !Ref HttpApi
+        AuthorizerType: JWT
+        IdentitySource:
+          - $request.header.Authorization
+        JwtConfiguration:
+          Audience:
+            - !Ref UserPoolClient
+          Issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+        Name: CognitoAuthorizer
+
+    # Cognito User Pool
+    UserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:service}-user-pool-${self:provider.stage}
+        AutoVerifiedAttributes:
+          - email
+        UsernameAttributes:
+          - email
+        Schema:
+          - Name: email
+            Required: true
+            Mutable: false
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 8
+            RequireUppercase: true
+            RequireLowercase: true
+            RequireNumbers: true
+            RequireSymbols: true
+
+    UserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:service}-user-pool-client-${self:provider.stage}
+        UserPoolId: !Ref UserPool
+        ExplicitAuthFlows:
+          - ALLOW_USER_PASSWORD_AUTH
+          - ALLOW_REFRESH_TOKEN_AUTH
+          - ALLOW_USER_SRP_AUTH
+        GenerateSecret: false
+
+    # DynamoDB Tables
+    YachtsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.YACHTS_TABLE}
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
+    FieldConfigTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.FIELD_CONFIG_TABLE}
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+  Outputs:
+    HttpApiUrl:
+      Description: URL of the HTTP API
+      Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com
+    
+    UserPoolId:
+      Description: Cognito User Pool ID
+      Value: !Ref UserPool
+      Export:
+        Name: ${self:service}-UserPoolId-${self:provider.stage}
+    
+    UserPoolClientId:
+      Description: Cognito User Pool Client ID
+      Value: !Ref UserPoolClient
+      Export:
+        Name: ${self:service}-UserPoolClientId-${self:provider.stage}
+
+plugins:
+  - serverless-offline

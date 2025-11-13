@@ -1,0 +1,26 @@
+{
+  "name": "yachtdb-backend",
+  "version": "1.0.0",
+  "description": "YachtDB Serverless Backend API",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "serverless deploy",
+    "deploy:dev": "serverless deploy --stage dev",
+    "deploy:prod": "serverless deploy --stage prod",
+    "remove": "serverless remove",
+    "logs": "serverless logs -f",
+    "invoke": "serverless invoke -f",
+    "test": "jest"
+  },
+  "keywords": ["serverless", "aws", "yacht", "dynamodb"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1500.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "serverless": "^4.0.0",
+    "serverless-offline": "^13.3.0"
+  }
+}
