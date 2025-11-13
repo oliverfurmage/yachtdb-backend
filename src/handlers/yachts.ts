@@ -1,8 +1,9 @@
-const AWS = require('aws-sdk');
-const { v4: uuidv4 } = require('uuid');
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDB } from 'aws-sdk';
+import { v4 as uuidv4 } from 'uuid';
 
-const YACHTS_TABLE = process.env.YACHTS_TABLE;
+const dynamodb = new DynamoDB.DocumentClient();
+const YACHTS_TABLE = process.env.YACHTS_TABLE!;
 
 const headers = {
   'Content-Type': 'application/json',
@@ -10,10 +11,19 @@ const headers = {
   'Access-Control-Allow-Credentials': true,
 };
 
+interface Yacht {
+  userId: string;
+  id: string;
+  name: string;
+  data: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // List all yachts for a user
-module.exports.list = async (event) => {
+export const list = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
 
     const result = await dynamodb.query({
       TableName: YACHTS_TABLE,
@@ -39,10 +49,18 @@ module.exports.list = async (event) => {
 };
 
 // Get a single yacht
-module.exports.get = async (event) => {
+export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
-    const { id } = event.pathParameters;
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
+    const id = event.pathParameters?.id;
+
+    if (!id) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Yacht ID is required' })
+      };
+    }
 
     const result = await dynamodb.get({
       TableName: YACHTS_TABLE,
@@ -73,10 +91,10 @@ module.exports.get = async (event) => {
 };
 
 // Create a new yacht
-module.exports.create = async (event) => {
+export const create = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
-    const { name, data } = JSON.parse(event.body);
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
+    const { name, data } = JSON.parse(event.body || '{}') as { name: string; data: Record<string, any> };
 
     if (!name || !data) {
       return {
@@ -86,7 +104,7 @@ module.exports.create = async (event) => {
       };
     }
 
-    const item = {
+    const item: Yacht = {
       userId,
       id: uuidv4(),
       name,
@@ -116,11 +134,19 @@ module.exports.create = async (event) => {
 };
 
 // Update a yacht
-module.exports.update = async (event) => {
+export const update = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
-    const { id } = event.pathParameters;
-    const { name, data } = JSON.parse(event.body);
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
+    const id = event.pathParameters?.id;
+    const { name, data } = JSON.parse(event.body || '{}') as { name: string; data: Record<string, any> };
+
+    if (!id) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Yacht ID is required' })
+      };
+    }
 
     if (!name || !data) {
       return {
@@ -144,8 +170,8 @@ module.exports.update = async (event) => {
       };
     }
 
-    const item = {
-      ...existing.Item,
+    const item: Yacht = {
+      ...(existing.Item as Yacht),
       name,
       data,
       updatedAt: new Date().toISOString()
@@ -172,10 +198,18 @@ module.exports.update = async (event) => {
 };
 
 // Delete a yacht
-module.exports.delete = async (event) => {
+export const deleteYacht = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
-    const { id } = event.pathParameters;
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
+    const id = event.pathParameters?.id;
+
+    if (!id) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'Yacht ID is required' })
+      };
+    }
 
     // First check if the yacht exists
     const existing = await dynamodb.get({

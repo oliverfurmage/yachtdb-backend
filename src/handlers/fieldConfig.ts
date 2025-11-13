@@ -1,7 +1,8 @@
-const AWS = require('aws-sdk');
-const dynamodb = new AWS.DynamoDB.DocumentClient();
+import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
+import { DynamoDB } from 'aws-sdk';
 
-const FIELD_CONFIG_TABLE = process.env.FIELD_CONFIG_TABLE;
+const dynamodb = new DynamoDB.DocumentClient();
+const FIELD_CONFIG_TABLE = process.env.FIELD_CONFIG_TABLE!;
 
 const headers = {
   'Content-Type': 'application/json',
@@ -9,10 +10,24 @@ const headers = {
   'Access-Control-Allow-Credentials': true,
 };
 
+interface FieldDefinition {
+  name: string;
+  type: 'text' | 'number' | 'date' | 'boolean' | 'textarea' | 'select';
+  label: string;
+  required: boolean;
+  options?: string[];
+}
+
+interface FieldConfiguration {
+  userId: string;
+  fields: FieldDefinition[];
+  updatedAt: string;
+}
+
 // Get field configuration
-module.exports.get = async (event) => {
+export const get = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
 
     const result = await dynamodb.get({
       TableName: FIELD_CONFIG_TABLE,
@@ -47,10 +62,10 @@ module.exports.get = async (event) => {
 };
 
 // Update field configuration
-module.exports.update = async (event) => {
+export const update = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
-    const userId = event.requestContext.authorizer.jwt.claims.sub;
-    const { fields } = JSON.parse(event.body);
+    const userId = event.requestContext.authorizer?.jwt.claims.sub as string;
+    const { fields } = JSON.parse(event.body || '{}') as { fields: FieldDefinition[] };
 
     if (!Array.isArray(fields)) {
       return {
@@ -60,7 +75,7 @@ module.exports.update = async (event) => {
       };
     }
 
-    const item = {
+    const item: FieldConfiguration = {
       userId,
       fields,
       updatedAt: new Date().toISOString()

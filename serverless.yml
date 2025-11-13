@@ -96,7 +96,7 @@ functions:
             id: !Ref HttpApiAuthorizer
 
   deleteYacht:
-    handler: src/handlers/yachts.delete
+    handler: src/handlers/yachts.deleteYacht
     events:
       - httpApi:
           path: /yachts/{id}
@@ -202,4 +202,5 @@ resources:
         Name: ${self:service}-UserPoolClientId-${self:provider.stage}
 
 plugins:
+  - serverless-plugin-typescript
   - serverless-offline
